@@ -171,7 +171,7 @@ def handler(sig, frame):
 
     output(warn, "CTRL+C Detected, ending the tunnel...")
     torrc_remove_tunnel()
-    exit()
+    sys.exit()
 
 
 #-------------------#
@@ -192,7 +192,7 @@ if shutil.which('tor'): # check if tor is installed
     output(info, 'TOR is installed.')
 else:
     output(error, 'TOR not detected, did you install it?')
-    exit()
+    sys.exit()
 
 output(job, f'Preparing to edit {args.tor_config}')
 
