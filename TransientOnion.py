@@ -1,5 +1,6 @@
 from colorama import Fore, Style, init
 from subprocess import run, DEVNULL
+import threading
 import requests
 import argparse
 import signal
@@ -32,14 +33,15 @@ parser.add_argument("--in-port", type=int, help="Source Port (80 default)", defa
 parser.add_argument("--out-port", type=int, help="Output Port (80 default)", default=80)
 parser.add_argument("--tor-config", type=str, help="Tor config file (/etc/tor/torrc default)", default="/etc/tor/torrc")
 parser.add_argument("--instant", help="Remove 0.1s timer inbetween outputs", action="store_true")
-
+parser.add_argument("--link-only", help="Print only the pure link", action="store_true")
+parser.add_argument("--auto-kill", type=int, help="Kill the tunnel after X seconds (default 0 = infinity)", default=0)
 
 #------------------------#
 #--- Global Variables ---#
 #------------------------#
 
 # main variables
-version = "1.0.0"
+version = "1.0.1"
 unique_id = random.randint(10000, 99999)
 
 # variables for function output()
@@ -87,10 +89,13 @@ def output(msg_type, value, one_line=None):
     if not args.instant:
         time.sleep(0.1)
 
-    if one_line != None:
-        print(f"\r{Fore.LIGHTCYAN_EX}[TransientOnion]: {text_clr}[{msg_type.upper()}]: {value}{Style.RESET_ALL}", end="")
+    if not args.link_only:
+        if one_line != None:
+            print(f"\r{Fore.LIGHTCYAN_EX}[TransientOnion]: {text_clr}[{msg_type.upper()}]: {value}{Style.RESET_ALL}", end="")
+        else:
+            print(f"{Fore.LIGHTCYAN_EX}[TransientOnion]: {text_clr}[{msg_type.upper()}]: {value}{Style.RESET_ALL}")
     else:
-        print(f"{Fore.LIGHTCYAN_EX}[TransientOnion]: {text_clr}[{msg_type.upper()}]: {value}{Style.RESET_ALL}")
+        pass
 
 def github_version_check():
     """Check GitHub for newer releases of TransientOnion"""
@@ -165,6 +170,25 @@ def get_tunnel_address():
     if result != None:
         return result.stdout.strip()
 
+def discard_old_tunnels():
+    """Delete old/unused tunnels in /var/lib/tor/"""
+
+    result = run(
+        ["sudo", "ls", "/var/lib/tor"],
+        capture_output=True,
+        text=True
+    )
+
+    unused_count = 0
+
+    for item in result.stdout.splitlines():
+        if item.startswith('TransientOnion_Temp_Tunnel_'):
+            item_path = f'/var/lib/tor/{item}'
+            run(["sudo", "rm", "-r", item_path])
+            unused_count += 1
+    
+    if unused_count > 0:
+        output(info, f'Discarded {unused_count} unused tunnel(s).')
 
 def handler(sig, frame):
     """CTRL+C (Interupt/Kill) Detection"""
@@ -178,7 +202,8 @@ def handler(sig, frame):
 #--- Application ---#
 #-------------------#
 
-print(f"{Fore.BLACK}--- TransientOnion ver. {version} ---{Style.RESET_ALL}")
+if not args.link_only:
+    print(f"{Fore.LIGHTBLACK_EX}--- TransientOnion ver. {version} ---{Style.RESET_ALL}")
 github_version_check()
 
 output(info, f'Starting with unique id "{unique_id}"')
@@ -186,13 +211,15 @@ output(info, f'Starting with unique id "{unique_id}"')
 if os.geteuid() == 0:
     output(info, 'Running as root (recommended)')
 else:
-    output(warn, 'Not running as root! Not recommended on some systems.')
+    output(warn, 'Not running as root! Script may ask for sudo permission.')
 
 if shutil.which('tor'): # check if tor is installed
     output(info, 'TOR is installed.')
 else:
     output(error, 'TOR not detected, did you install it?')
     sys.exit()
+
+discard_old_tunnels()
 
 output(job, f'Preparing to edit {args.tor_config}')
 
@@ -234,6 +261,24 @@ else:
         output(connection, f"Forwarding {args.addr}:{args.in_port} ──> {address_prefix}{get_tunnel_address()}")
     else:
         output(connection, f"Forwarding {args.addr}:{args.in_port} ──> {get_tunnel_address()}:{args.out_port}")
+    
+    if args.link_only:
+        print(get_tunnel_address())
+
+# Auto-kill tunnel after X seconds with --auto-kill argument
+if args.auto_kill > 0:
+    def autokill_countdown():
+        output(info, f'Starting the countdown of {args.auto_kill} seconds.')
+
+        try:
+            time.sleep(args.auto_kill)
+            output(warn, f"Countdown of {args.auto_kill} seconds ran out, killing the tunnel.")
+            torrc_remove_tunnel()
+        finally:
+            os._exit(0)
+
+    t = threading.Thread(target=autokill_countdown)
+    t.start()
 
 # When user interupted the program (CTRL+C) revert the temporary changes in the tor config file.
 signal.signal(signal.SIGINT, handler)
