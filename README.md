@@ -33,6 +33,10 @@ if tor isn't running the script obviously won't do much.
 
 ### 1. Release/Pre-build (recommended)
 Download the lates release ([from here](https://github.com/schyzoware/TransientOnion/releases/latest))
+Add permission to execute
+```bash
+chmod +x TransientOnion_linux
+```
 And run the executable
 ```bash
 ./TransientOnion_linux
