@@ -27,7 +27,7 @@ import os
 #----------------#
 
 init() # because this app totally supports Windows.
-parser = argparse.ArgumentParser(description='Example usage: "./TransientOnion -in 8080 -out 80 -addr 127.0.0.1" --> 8080 is SOURCE,')
+parser = argparse.ArgumentParser(description='Example usage: "./TransientOnion --in-port 8080 --out-port 80 --addr 127.0.0.1" --> 8080 is SOURCE,')
 parser.add_argument("--addr", type=str, help="Source IP Address (127.0.0.1 default)", default="127.0.0.1")
 parser.add_argument("--in-port", type=int, help="Source Port (80 default)", default=80)
 parser.add_argument("--out-port", type=int, help="Output Port (80 default)", default=80)
